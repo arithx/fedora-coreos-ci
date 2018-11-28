@@ -47,6 +47,14 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
             currentBuild.description = "⚡ ${newBuildID}"
         }
 
+        stage('Test') {
+            utils.shwrap("""
+            latest_build=\$(readlink builds/latest)
+            qcow=\$(ls builds/"\${latest_build}"/*-"\${latest_build}"-qemu.qcow2)
+            kola --qemu-image "\${qcow}" -b fcos run | tee
+            """)
+        }
+
         stage('Archive') {
             utils.shwrap("""
             # Change perms to allow reading on webserver side.
