@@ -34,7 +34,7 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
 
         stage('Build') {
             utils.shwrap("""
-            coreos-assembler build
+            coreos-assembler build --force
             """)
         }
 
