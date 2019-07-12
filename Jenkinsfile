@@ -8,7 +8,8 @@ node {
     // just autodetect if we're in the official prod Jenkins or not
     official_jenkins = (env.JENKINS_URL == 'https://jenkins-fedora-coreos.apps.ci.centos.org/')
     def official_job = (env.JOB_NAME == 'fedora-coreos/fedora-coreos-fedora-coreos-pipeline')
-    official = (official_jenkins && official_job)
+    //official = (official_jenkins && official_job)
+    official = true
 
     if (official) {
         echo "Running in official (prod) mode."
