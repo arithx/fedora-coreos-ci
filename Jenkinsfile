@@ -244,15 +244,6 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
                         --bucket s3://${s3_bucket}/ami-import
                     """)
                 }
-
-                // Replicate the newly uploaded AMI to other regions. Intentionally
-                // split out from the 'Upload AWS' stage to allow for tests to be added
-                // at a later date before replicating said image.
-                stage('Replicate AWS AMI') {
-                    utils.shwrap("""
-                    coreos-assembler aws-replicate --build=${newBuildID}
-                    """)
-                }
             }
         }
 
@@ -288,6 +279,19 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
               mkdir -p ${developer_builddir}
               cp -aT builds ${developer_builddir}
               """)
+            }
+        }
+
+
+        if (!params.MINIMAL) {
+            stage('Kola Runs') {
+                container('jnlp') {
+                    utils.shwrap("""
+                        oc start-build --wait fedora-coreos-pipeline-kola-aws \
+                            -e BUILDID=${newBuildID} \
+                            -e S3_STREAM_DIR=${s3_stream_dir}
+                    """)
+                }
             }
         }
 

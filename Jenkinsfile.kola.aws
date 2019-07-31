@@ -1,0 +1,59 @@
+def utils, streams
+node {
+    checkout scm
+    utils = load("utils.groovy")
+    streams = load("streams.groovy")
+    pod = readFile(file: "manifests/pod.yaml")
+}
+
+properties([
+    pipelineTriggers([]),
+    parameters([
+      string(name: 'BUILDID',
+             description: 'Fedora CoreOS Build ID to test',
+             defaultValue: '',
+             trim: true),
+      string(name: 'S3_STREAM_DIR',
+             description: 'Fedora CoreOS S3 Stream Directory',
+             defaultValue: '',
+             trim: true)
+    ])
+])
+
+currentBuild.description = "[${params.BUILDID}] Running"
+
+// substitute the right COSA image into the pod definition before spawning it
+pod = pod.replace("COREOS_ASSEMBLER_IMAGE", "coreos-assembler:master")
+
+podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultContainer: 'jnlp') {
+    node('coreos-assembler') { container('coreos-assembler') {
+        def ami, ami_region
+        stage('Fetching Build Details') {
+            utils.shwrap("""
+            coreos-assembler buildprep s3://${params.S3_STREAM_DIR}/builds
+            """)
+
+            def basearch = utils.shwrap_capture("coreos-assembler basearch")
+            def meta_json = "builds/${params.BUILDID}/${basearch}/meta.json"
+            def meta = readJSON file: meta_json
+            if (meta.amis.size() > 0) {
+                ami = meta['amis'][0]['hvm']
+                ami_region = meta['amis'][0]['name']
+            }
+        }
+
+        stage('AWS Kola Run') {
+          utils.shwrap("""
+          kola run -p aws --aws-ami ${ami} --aws-region ${ami_region} -b fcos || :
+          tar -cf - _kola_temp/ | xz -c9 > _kola_temp.tar.xz
+          """)
+          archiveArtifacts "_kola_temp.tar.xz"
+        }
+
+        def report = readJSON file: "_kola_temp/aws-latest/reports/report.json"
+        if (report["result"] != "PASS") {
+          currentBuild.result = 'FAILURE'
+          return
+        }
+    }}
+}
