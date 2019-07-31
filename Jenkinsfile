@@ -203,6 +203,7 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
             return
         }
 
+        def ami, ami_region
         if (!params.MINIMAL) {
             stage('Build Metal') {
                 utils.shwrap("""
@@ -247,6 +248,13 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
                         --bucket s3://${s3_bucket}/ami-import \
                         --grant-user ${FEDORA_AWS_TESTING_USER_ID}
                     """)
+
+                    def meta_json = "builds/${newBuildID}/${basearch}/meta.json"
+                    def meta = readJSON file: meta_json
+                    if (meta.amis.size() > 0) {
+                        ami = meta['amis'][0]['hvm']
+                        ami_region = meta['amis'][0]['name']
+                    }
                 }
             }
         }
@@ -283,6 +291,20 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
               mkdir -p ${developer_builddir}
               cp -aT builds ${developer_builddir}
               """)
+            }
+        }
+
+
+        stage('Kola Runs') {
+            container('jnlp') {
+                // TODO: Figure out multithreading
+                if (ami) {
+                    utils.shwrap("""
+                        oc start-build --wait fedora-coreos-pipeline-kola-aws \
+                            -e AMI=${ami} \
+                            -e REGION=${ami_region}
+                    """)
+                }
             }
         }
 

@@ -1,0 +1,47 @@
+def utils, streams
+node {
+    checkout scm
+    utils = load("utils.groovy")
+    streams = load("streams.groovy")
+    pod = readFile(file: "manifests/pod.yaml")
+}
+
+properties([
+    pipelineTriggers([]),
+    parameters([
+      string(name: 'AMI',
+             description: 'Fedora CoreOS AMI to test',
+             defaultValue: '',
+             trim: true),
+      string(name: 'REGION',
+             description: 'Fedora CoreOS AMI region',
+             defaultValue: '',
+             trim: true)
+    ])
+])
+
+currentBuild.description = "[${params.AMI}] Running"
+
+// substitute the right COSA image into the pod definition before spawning it
+pod = pod.replace("COREOS_ASSEMBLER_IMAGE", "coreos-assembler:master")
+
+podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultContainer: 'jnlp') {
+    node('coreos-assembler') { container('coreos-assembler') {
+        stage('AWS Kola Run') {
+          // Run plume to publish official builds; This will handle modifying
+          // object ACLs, modifying AMI image attributes,
+          // and creating/modifying the releases.json metadata index
+          utils.shwrap("""
+          kola run -p aws --aws-ami ${params.AMI} --aws-region ${params.REGION} -b fcos || :
+          tar -cf - _kola_temp/ | xz -c9 > _kola_temp.tar.xz
+          """)
+          archiveArtifacts "_kola_temp.tar.xz"
+        }
+
+        def report = readJSON file: "_kola_temp/aws-latest/reports/report.json"
+        if (report["result"] != "PASS") {
+          currentBuild.result = 'FAILURE'
+          return
+        }
+    }}
+}
