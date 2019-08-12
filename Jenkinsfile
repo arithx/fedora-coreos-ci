@@ -244,6 +244,15 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
                         --bucket s3://${s3_bucket}/ami-import
                     """)
                 }
+
+                // Replicate the newly uploaded AMI to other regions. Intentionally
+                // split out from the 'Upload AWS' stage to allow for tests to be added
+                // at a later date before replicating said image.
+                stage('Replicate AWS AMI') {
+                    utils.shwrap("""
+                    coreos-assembler aws-replicate --build=${newBuildID}
+                    """)
+                }
             }
         }
 
