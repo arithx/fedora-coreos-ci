@@ -250,7 +250,7 @@ podTemplate(cloud: 'openshift', label: 'coreos-assembler', yaml: pod, defaultCon
                 // at a later date before replicating said image.
                 stage('Replicate AWS AMI') {
                     utils.shwrap("""
-                    coreos-assembler aws-replicate --build=${newBuildID}
+                    coreos-assembler aws-replicate --build=${newBuildID} --regions us-east-2
                     """)
                 }
             }
